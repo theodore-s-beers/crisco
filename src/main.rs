@@ -31,5 +31,8 @@ fn handle_client(mut stream: TcpStream) {
         );
 
         let _ = stream.write_all(response.as_bytes());
+    } else {
+        let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
+        let _ = stream.write_all(response.as_bytes());
     }
 }
