@@ -17,13 +17,25 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
+fn extract_url(request: &str) -> Option<&str> {
+    let first_line = request.lines().next()?;
+    let parts: Vec<&str> = first_line.split_whitespace().collect();
+    if parts.len() >= 2 {
+        Some(parts[1])
+    } else {
+        None
+    }
+}
+
 fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0u8; 512];
+    let mut buffer = [0u8; 1024];
 
     if stream.read(&mut buffer).is_ok() {
-        println!("Received request:\n{}", String::from_utf8_lossy(&buffer));
+        let request = String::from_utf8_lossy(&buffer);
+        println!("Received request:\n{request}");
 
-        let body = "Hello world";
+        let url = extract_url(&request).unwrap_or("/");
+        let body = format!("Path requested: {url}");
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
             body.len(),
