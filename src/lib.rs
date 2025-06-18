@@ -94,8 +94,8 @@ pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
         return Err(ReqParseError::InvalidReqLine);
     }
 
-    let method = parts[0].to_string();
-    if !method.eq_ignore_ascii_case("get") && !method.eq_ignore_ascii_case("post") {
+    let method = parts[0].to_ascii_uppercase();
+    if method != "GET" && method != "POST" {
         return Err(ReqParseError::InvalidMethod);
     }
 
