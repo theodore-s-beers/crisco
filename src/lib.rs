@@ -5,6 +5,10 @@ use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 use std::string::ToString;
 
+//
+// Types
+//
+
 pub struct HttpRequest {
     pub method: String,
     pub path: String,
@@ -58,46 +62,15 @@ impl fmt::Display for ReqParseError {
     }
 }
 
+//
+// Constants
+//
+
 const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-#[must_use]
-pub fn shorten_url(url: &str) -> String {
-    let prefix = get_hash_prefix(url);
-    let base62_str = to_base62(prefix);
-
-    // Return up to 7 characters of the Base62 string
-    base62_str
-        .get(..7)
-        .map_or_else(|| base62_str.clone(), ToString::to_string)
-}
-
-fn get_hash_prefix(url: &str) -> u64 {
-    djb2(url) & 0x0000_FFFF_FFFF_FFFF // Keep bottom 48 bits
-}
-
-fn djb2(s: &str) -> u64 {
-    let mut hash = 5381u64;
-    for byte in s.bytes() {
-        hash = (hash << 5).wrapping_add(hash) ^ u64::from(byte);
-    }
-    hash
-}
-
-fn to_base62(mut n: u64) -> String {
-    if n == 0 {
-        return "0".to_string();
-    }
-
-    // 9 Base62 characters are enough for any 48-bit number
-    let mut buf: Vec<u8> = Vec::with_capacity(9);
-    while n > 0 {
-        buf.push(BASE62[(n % 62) as usize]);
-        n /= 62;
-    }
-
-    buf.reverse();
-    String::from_utf8(buf).unwrap()
-}
+//
+// Public functions
+//
 
 /// # Errors
 ///
@@ -164,4 +137,47 @@ pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
         headers,
         body,
     })
+}
+
+#[must_use]
+pub fn shorten_url(url: &str) -> String {
+    let prefix = get_hash_prefix(url);
+    let base62_str = to_base62(prefix);
+
+    // Return up to 7 characters of the Base62 string
+    base62_str
+        .get(..7)
+        .map_or_else(|| base62_str.clone(), ToString::to_string)
+}
+
+//
+// Private functions
+//
+
+fn get_hash_prefix(url: &str) -> u64 {
+    djb2(url) & 0x0000_FFFF_FFFF_FFFF // Keep bottom 48 bits
+}
+
+fn djb2(s: &str) -> u64 {
+    let mut hash = 5381u64;
+    for byte in s.bytes() {
+        hash = (hash << 5).wrapping_add(hash) ^ u64::from(byte);
+    }
+    hash
+}
+
+fn to_base62(mut n: u64) -> String {
+    if n == 0 {
+        return "0".to_string();
+    }
+
+    // 9 Base62 characters are enough for any 48-bit number
+    let mut buf: Vec<u8> = Vec::with_capacity(9);
+    while n > 0 {
+        buf.push(BASE62[(n % 62) as usize]);
+        n /= 62;
+    }
+
+    buf.reverse();
+    String::from_utf8(buf).unwrap()
 }
