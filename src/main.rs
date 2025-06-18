@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
+use scratch_server::parse_req;
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 
@@ -17,34 +18,39 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
-fn extract_url(request: &str) -> Option<&str> {
-    let first_line = request.lines().next()?;
-    let parts: Vec<&str> = first_line.split_whitespace().collect();
-    if parts.len() >= 2 {
-        Some(parts[1])
-    } else {
-        None
-    }
-}
-
 fn handle_client(mut stream: TcpStream) {
-    let mut buffer = [0u8; 1024];
+    let req = parse_req(&mut stream);
 
-    if stream.read(&mut buffer).is_ok() {
-        let request = String::from_utf8_lossy(&buffer);
-        println!("Received request:\n{request}");
+    match req {
+        Ok(req) => {
+            println!("Received {} request for path {}", req.method, req.path);
+            let body = format!("Path requested: {}", req.path);
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            let _ = stream.write_all(response.as_bytes());
+        }
+        Err(e) => {
+            eprintln!("{e}");
+            let body = format!("{e}");
 
-        let url = extract_url(&request).unwrap_or("/");
-        let body = format!("Path requested: {url}");
-        let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-            body.len(),
-            body
-        );
-
-        let _ = stream.write_all(response.as_bytes());
-    } else {
-        let response = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\n\r\n";
-        let _ = stream.write_all(response.as_bytes());
+            if let scratch_server::ReqParseError::IoError(_) = e {
+                let response = format!(
+                    "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes());
+            } else {
+                let response = format!(
+                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                let _ = stream.write_all(response.as_bytes());
+            }
+        }
     }
 }
