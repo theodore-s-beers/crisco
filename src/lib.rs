@@ -17,6 +17,7 @@ pub enum ReqParseError {
     IoError(String),
     InvalidMethod,
     InvalidReqLine,
+    OversizedBody,
     ParseIntError(String),
     Utf8Error(String),
 }
@@ -85,10 +86,12 @@ fn to_base62(mut n: u64) -> String {
 /// or there are issues reading the headers or body.
 pub fn parse_req(mut stream: TcpStream) -> Result<HttpRequest, ReqParseError> {
     let mut reader = BufReader::new(&mut stream);
+    let mut headers_reader = reader.by_ref().take(8192);
+
     let mut headers: Vec<(String, String)> = Vec::new();
     let mut req_line = String::new();
 
-    let req_line_size = reader.read_line(&mut req_line)?;
+    let req_line_size = headers_reader.read_line(&mut req_line)?;
     if req_line_size == 0 {
         return Err(ReqParseError::ConnectionClosed);
     }
@@ -108,7 +111,7 @@ pub fn parse_req(mut stream: TcpStream) -> Result<HttpRequest, ReqParseError> {
     // Read headers
     loop {
         let mut line = String::new();
-        if reader.read_line(&mut line)? == 0 {
+        if headers_reader.read_line(&mut line)? == 0 {
             return Err(ReqParseError::ConnectionClosed);
         }
 
@@ -127,8 +130,10 @@ pub fn parse_req(mut stream: TcpStream) -> Result<HttpRequest, ReqParseError> {
         .map_or("0", |(_, v)| v.as_str());
 
     let content_length: usize = content_length_str.parse()?;
+    if content_length > 1_048_576 {
+        return Err(ReqParseError::OversizedBody);
+    }
 
-    // Read body
     let mut body_bytes = vec![0u8; content_length];
     reader.read_exact(&mut body_bytes)?;
     let body = String::from_utf8(body_bytes)?;
