@@ -24,7 +24,11 @@ fn handle_client(mut stream: TcpStream) {
     match req {
         Ok(req) => {
             println!("Received {} request for path {}", req.method, req.path);
-            let body = format!("Path requested: {}", req.path);
+            let body = if req.method == "POST" {
+                req.body
+            } else {
+                format!("Path requested: {}", req.path)
+            };
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
                 body.len(),
