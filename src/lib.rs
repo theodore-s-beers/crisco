@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
-use sha2::{Digest, Sha256};
+use std::fmt;
 use std::io::{BufRead, BufReader, Read};
 use std::net::TcpStream;
 use std::string::ToString;
@@ -14,29 +14,47 @@ pub struct HttpRequest {
 
 pub enum ReqParseError {
     ConnectionClosed,
-    IoError(String),
     InvalidMethod,
     InvalidReqLine,
+    IoError(std::io::Error),
     OversizedBody,
-    ParseIntError(String),
-    Utf8Error(String),
+    ParseIntError(std::num::ParseIntError),
+    Utf8Error(std::string::FromUtf8Error),
 }
 
 impl From<std::io::Error> for ReqParseError {
     fn from(err: std::io::Error) -> Self {
-        Self::IoError(err.to_string())
+        Self::IoError(err)
     }
 }
 
 impl From<std::num::ParseIntError> for ReqParseError {
     fn from(err: std::num::ParseIntError) -> Self {
-        Self::ParseIntError(err.to_string())
+        Self::ParseIntError(err)
     }
 }
 
 impl From<std::string::FromUtf8Error> for ReqParseError {
     fn from(err: std::string::FromUtf8Error) -> Self {
-        Self::Utf8Error(err.to_string())
+        Self::Utf8Error(err)
+    }
+}
+
+impl fmt::Display for ReqParseError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ReqParseError::{
+            ConnectionClosed, InvalidMethod, InvalidReqLine, IoError, OversizedBody, ParseIntError,
+            Utf8Error,
+        };
+        match self {
+            ConnectionClosed => write!(f, "Connection closed by client"),
+            IoError(e) => write!(f, "I/O error: {e}"),
+            InvalidMethod => write!(f, "Invalid HTTP method"),
+            InvalidReqLine => write!(f, "Invalid request line"),
+            OversizedBody => write!(f, "Request body is too large"),
+            ParseIntError(e) => write!(f, "Failed to parse integer: {e}"),
+            Utf8Error(e) => write!(f, "UTF-8 error: {e}"),
+        }
     }
 }
 
@@ -54,13 +72,15 @@ pub fn shorten_url(url: &str) -> String {
 }
 
 fn get_hash_prefix(url: &str) -> u64 {
-    let mut hasher = Sha256::new();
-    hasher.update(url.as_bytes());
-    let digest = hasher.finalize();
+    djb2(url) & 0x0000_FFFF_FFFF_FFFF // Keep bottom 48 bits
+}
 
-    let mut bytes = [0u8; 8];
-    bytes[2..].copy_from_slice(&digest[..6]); // Fill last 6 bytes
-    u64::from_be_bytes(bytes)
+fn djb2(s: &str) -> u64 {
+    let mut hash = 5381u64;
+    for byte in s.bytes() {
+        hash = (hash << 5).wrapping_add(hash) ^ u64::from(byte);
+    }
+    hash
 }
 
 fn to_base62(mut n: u64) -> String {
@@ -84,8 +104,8 @@ fn to_base62(mut n: u64) -> String {
 /// Returns `ReqParseError` if the request cannot be parsed,
 /// such as if the connection is closed, the request line is invalid,
 /// or there are issues reading the headers or body.
-pub fn parse_req(mut stream: TcpStream) -> Result<HttpRequest, ReqParseError> {
-    let mut reader = BufReader::new(&mut stream);
+pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
+    let mut reader = BufReader::new(stream);
     let mut headers_reader = reader.by_ref().take(8192);
 
     let mut headers: Vec<(String, String)> = Vec::new();
