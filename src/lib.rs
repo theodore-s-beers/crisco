@@ -1,7 +1,43 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
 use sha2::{Digest, Sha256};
+use std::io::{BufRead, BufReader, Read};
+use std::net::TcpStream;
 use std::string::ToString;
+
+pub struct HttpRequest {
+    pub method: String,
+    pub path: String,
+    pub headers: Vec<(String, String)>,
+    pub body: String,
+}
+
+pub enum ReqParseError {
+    ConnectionClosed,
+    IoError(String),
+    InvalidMethod,
+    InvalidReqLine,
+    ParseIntError(String),
+    Utf8Error(String),
+}
+
+impl From<std::io::Error> for ReqParseError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IoError(err.to_string())
+    }
+}
+
+impl From<std::num::ParseIntError> for ReqParseError {
+    fn from(err: std::num::ParseIntError) -> Self {
+        Self::ParseIntError(err.to_string())
+    }
+}
+
+impl From<std::string::FromUtf8Error> for ReqParseError {
+    fn from(err: std::string::FromUtf8Error) -> Self {
+        Self::Utf8Error(err.to_string())
+    }
+}
 
 const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -40,4 +76,67 @@ fn to_base62(mut n: u64) -> String {
 
     buf.reverse();
     String::from_utf8(buf).unwrap()
+}
+
+/// # Errors
+///
+/// Returns `ReqParseError` if the request cannot be parsed,
+/// such as if the connection is closed, the request line is invalid,
+/// or there are issues reading the headers or body.
+pub fn parse_req(mut stream: TcpStream) -> Result<HttpRequest, ReqParseError> {
+    let mut reader = BufReader::new(&mut stream);
+    let mut headers: Vec<(String, String)> = Vec::new();
+    let mut req_line = String::new();
+
+    let req_line_size = reader.read_line(&mut req_line)?;
+    if req_line_size == 0 {
+        return Err(ReqParseError::ConnectionClosed);
+    }
+
+    let parts: Vec<&str> = req_line.split_whitespace().collect();
+    if parts.len() < 2 {
+        return Err(ReqParseError::InvalidReqLine);
+    }
+
+    let method = parts[0].to_string();
+    if !method.eq_ignore_ascii_case("get") && !method.eq_ignore_ascii_case("post") {
+        return Err(ReqParseError::InvalidMethod);
+    }
+
+    let path = parts[1].to_string();
+
+    // Read headers
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 {
+            return Err(ReqParseError::ConnectionClosed);
+        }
+
+        if line == "\r\n" {
+            break;
+        }
+
+        if let Some((k, v)) = line.split_once(':') {
+            headers.push((k.trim().to_string(), v.trim().to_string()));
+        }
+    }
+
+    let content_length_str = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("Content-Length"))
+        .map_or("0", |(_, v)| v.as_str());
+
+    let content_length: usize = content_length_str.parse()?;
+
+    // Read body
+    let mut body_bytes = vec![0u8; content_length];
+    reader.read_exact(&mut body_bytes)?;
+    let body = String::from_utf8(body_bytes)?;
+
+    Ok(HttpRequest {
+        method,
+        path,
+        headers,
+        body,
+    })
 }
