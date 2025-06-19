@@ -19,9 +19,9 @@ fn main() -> std::io::Result<()> {
 }
 
 fn handle_client(mut stream: TcpStream) {
-    let req = parse_req(&mut stream);
+    let request = parse_req(&mut stream);
 
-    match req {
+    match request {
         Ok(req) => {
             println!("Received {} request for path {}", req.method, req.path);
             let body = if req.method == "POST" {
