@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
-use scratch_server::{extract_url, parse_req};
+use scratch_server::{extract_url, parse_req, shorten_url};
 use std::io::prelude::*;
 use std::net::{TcpListener, TcpStream};
 
@@ -25,7 +25,11 @@ fn handle_client(mut stream: TcpStream) {
         Ok(req) => {
             println!("Received {} request for path {}", req.method, req.path);
             let body = if req.method == "POST" {
-                extract_url(&req.body).unwrap_or(&req.body).to_owned()
+                if let Some(url) = extract_url(&req.body) {
+                    shorten_url(url)
+                } else {
+                    req.body
+                }
             } else {
                 format!("Path requested: {}", req.path)
             };
