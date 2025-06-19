@@ -50,14 +50,15 @@ impl fmt::Display for ReqParseError {
             ConnectionClosed, InvalidMethod, InvalidReqLine, IoError, OversizedBody, ParseIntError,
             Utf8Error,
         };
+
         match self {
             ConnectionClosed => write!(f, "Connection closed by client"),
-            IoError(e) => write!(f, "I/O error: {e}"),
             InvalidMethod => write!(f, "Invalid HTTP method"),
             InvalidReqLine => write!(f, "Invalid request line"),
+            IoError(e) => write!(f, "{e}"),
             OversizedBody => write!(f, "Request body is too large"),
-            ParseIntError(e) => write!(f, "Failed to parse integer: {e}"),
-            Utf8Error(e) => write!(f, "UTF-8 error: {e}"),
+            ParseIntError(e) => write!(f, "{e}"),
+            Utf8Error(e) => write!(f, "{e}"),
         }
     }
 }
@@ -79,7 +80,7 @@ const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP
 /// or there are issues reading the headers or body.
 pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
     let mut reader = BufReader::new(stream);
-    let mut headers_reader = reader.by_ref().take(8192);
+    let mut headers_reader = reader.by_ref().take(8192); // Headers max 8 KiB
 
     let mut headers: Vec<(String, String)> = Vec::new();
     let mut req_line = String::new();
