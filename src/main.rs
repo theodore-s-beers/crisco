@@ -1,7 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
-use scratch_server::{extract_url, parse_req, shorten_url};
-use std::io::prelude::*;
+use scratch_server::{handle_err, handle_get, handle_post, parse_req};
 use std::net::{TcpListener, TcpStream};
 
 fn main() -> std::io::Result<()> {
@@ -19,46 +18,22 @@ fn main() -> std::io::Result<()> {
 }
 
 fn handle_client(mut stream: TcpStream) {
-    let request = parse_req(&mut stream);
+    let req = parse_req(&mut stream);
 
-    match request {
+    match req {
         Ok(req) => {
             println!("Received {} request for path {}", req.method, req.path);
-            let body = if req.method == "POST" {
-                if let Some(url) = extract_url(&req.body) {
-                    shorten_url(url)
-                } else {
-                    req.body
-                }
+
+            if req.method == "POST" {
+                handle_post(stream, &req);
             } else {
-                format!("Path requested: {}", req.path)
-            };
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                body.len(),
-                body
-            );
-            let _ = stream.write_all(response.as_bytes());
+                handle_get(stream, &req);
+            }
         }
+
         Err(e) => {
             eprintln!("{e}");
-            let body = format!("{e}");
-
-            if let scratch_server::ReqParseError::IoError(_) = e {
-                let response = format!(
-                    "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(response.as_bytes());
-            } else {
-                let response = format!(
-                    "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-                    body.len(),
-                    body
-                );
-                let _ = stream.write_all(response.as_bytes());
-            }
+            handle_err(stream, &e);
         }
     }
 }

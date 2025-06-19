@@ -1,9 +1,9 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
 use std::fmt;
-use std::io::{BufRead, BufReader, Read};
+use std::io::BufReader;
+use std::io::prelude::*;
 use std::net::TcpStream;
-use std::string::ToString;
 
 //
 // Types
@@ -16,6 +16,7 @@ pub struct HttpRequest {
     pub body: String,
 }
 
+#[derive(Debug)]
 pub enum ReqParseError {
     ConnectionClosed,
     InvalidMethod,
@@ -63,11 +64,15 @@ impl fmt::Display for ReqParseError {
     }
 }
 
+impl std::error::Error for ReqParseError {}
+
 //
 // Constants
 //
 
 const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const MAX_BODY: usize = 1_048_576;
+const MAX_HEADER: u64 = 8192;
 
 //
 // Public functions
@@ -80,7 +85,7 @@ const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP
 /// or there are issues reading the headers or body.
 pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
     let mut reader = BufReader::new(stream);
-    let mut headers_reader = reader.by_ref().take(8192); // Headers max 8 KiB
+    let mut headers_reader = reader.by_ref().take(MAX_HEADER);
 
     let mut headers: Vec<(String, String)> = Vec::new();
     let mut req_line = String::new();
@@ -124,7 +129,7 @@ pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
         .map_or("0", |(_, v)| v.as_str());
 
     let content_length: usize = content_length_str.parse()?;
-    if content_length > 1_048_576 {
+    if content_length > MAX_BODY {
         return Err(ReqParseError::OversizedBody);
     }
 
@@ -140,8 +145,64 @@ pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
     })
 }
 
-#[must_use]
-pub fn extract_url(body: &str) -> Option<&str> {
+pub fn handle_get(mut stream: TcpStream, req: &HttpRequest) {
+    let msg = format!("Path requested: {}", req.path);
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+        msg.len(),
+        msg
+    );
+
+    let _ = stream.write_all(response.as_bytes());
+}
+
+pub fn handle_post(mut stream: TcpStream, req: &HttpRequest) {
+    if let Some(url) = extract_url(&req.body) {
+        let short = shorten_url(url);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            short.len(),
+            short
+        );
+
+        let _ = stream.write_all(response.as_bytes());
+    } else {
+        let msg = "Missing or invalid URL in request body";
+        let response = format!(
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            msg.len(),
+            msg
+        );
+
+        let _ = stream.write_all(response.as_bytes());
+    }
+}
+
+pub fn handle_err(mut stream: TcpStream, err: &ReqParseError) {
+    let msg = format!("{err}");
+
+    let response = if let ReqParseError::IoError(_) = err {
+        format!(
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            msg.len(),
+            msg
+        )
+    } else {
+        format!(
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            msg.len(),
+            msg
+        )
+    };
+
+    let _ = stream.write_all(response.as_bytes());
+}
+
+//
+// Private functions
+//
+
+fn extract_url(body: &str) -> Option<&str> {
     let key = "\"url\":";
 
     let start: usize = body.find(key)? + key.len();
@@ -159,8 +220,7 @@ pub fn extract_url(body: &str) -> Option<&str> {
     Some(url)
 }
 
-#[must_use]
-pub fn shorten_url(url: &str) -> String {
+fn shorten_url(url: &str) -> String {
     let prefix = get_hash_prefix(url);
     let base62_str = to_base62(prefix);
 
@@ -169,10 +229,6 @@ pub fn shorten_url(url: &str) -> String {
         .get(..7)
         .map_or_else(|| base62_str.clone(), ToString::to_string)
 }
-
-//
-// Private functions
-//
 
 fn get_hash_prefix(url: &str) -> u64 {
     djb2(url) & 0x0000_FFFF_FFFF_FFFF // Keep bottom 48 bits
