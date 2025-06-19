@@ -140,6 +140,25 @@ pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
 }
 
 #[must_use]
+pub fn extract_url(body: &str) -> Option<&str> {
+    let key = "\"url\":";
+
+    let start: usize = body.find(key)? + key.len();
+    let remainder: &str = body[start..].trim_start();
+    if !remainder.starts_with('"') {
+        return None;
+    }
+
+    let end = remainder[1..].find('"')?;
+    let url = &remainder[1..=end];
+    if !url.starts_with("http://") && !url.starts_with("https://") {
+        return None;
+    }
+
+    Some(url)
+}
+
+#[must_use]
 pub fn shorten_url(url: &str) -> String {
     let prefix = get_hash_prefix(url);
     let base62_str = to_base62(prefix);
