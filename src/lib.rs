@@ -1,6 +1,8 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
+use std::collections::HashMap;
 use std::fmt;
+use std::hash::BuildHasher;
 use std::io::BufReader;
 use std::io::prelude::*;
 use std::net::TcpStream;
@@ -145,20 +147,35 @@ pub fn parse_req(stream: &mut TcpStream) -> Result<HttpRequest, ReqParseError> {
     })
 }
 
-pub fn handle_get(mut stream: TcpStream, req: &HttpRequest) {
-    let msg = format!("Path requested: {}", req.path);
-    let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
-        msg.len(),
-        msg
-    );
+pub fn handle_get<S: BuildHasher>(
+    mut stream: TcpStream,
+    store: &mut HashMap<String, String, S>,
+    req: &HttpRequest,
+) {
+    let short = req.path.trim_start_matches('/');
 
-    let _ = stream.write_all(response.as_bytes());
+    if let Some(url) = store.get(short) {
+        let response =
+            format!("HTTP/1.1 302 Found\r\nLocation: {url}\r\nContent-Length: 0\r\n\r\n");
+
+        let _ = stream.write_all(response.as_bytes());
+    } else {
+        let response =
+            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
+
+        let _ = stream.write_all(response.as_bytes());
+    }
 }
 
-pub fn handle_post(mut stream: TcpStream, req: &HttpRequest) {
+pub fn handle_post<S: BuildHasher>(
+    mut stream: TcpStream,
+    store: &mut HashMap<String, String, S>,
+    req: &HttpRequest,
+) {
     if let Some(url) = extract_url(&req.body) {
         let short = shorten_url(url);
+        store.insert(short.clone(), url.to_owned());
+
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
             short.len(),
