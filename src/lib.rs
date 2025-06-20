@@ -166,8 +166,9 @@ pub fn handle_get<S: BuildHasher>(
     }
 
     if let Some(url) = store.get(short) {
-        let response =
-            format!("HTTP/1.1 302 Found\r\nLocation: {url}\r\nContent-Length: 0\r\n\r\n");
+        let response = format!(
+            "HTTP/1.1 302 Found\r\nLocation: {url}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        );
 
         let _ = stream.write_all(response.as_bytes());
     } else {
@@ -185,7 +186,7 @@ pub fn handle_post<S: BuildHasher>(
         store.insert(short.clone(), url.to_owned());
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             short.len(),
             short
         );
@@ -194,7 +195,7 @@ pub fn handle_post<S: BuildHasher>(
     } else {
         let msg = "Missing or invalid URL in request body";
         let response = format!(
-            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             msg.len(),
             msg
         );
@@ -208,13 +209,13 @@ pub fn handle_err(mut stream: TcpStream, err: &ReqParseError) {
 
     let response = if let ReqParseError::IoError(_) = err {
         format!(
-            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             msg.len(),
             msg
         )
     } else {
         format!(
-            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             msg.len(),
             msg
         )
@@ -230,7 +231,7 @@ pub fn handle_err(mut stream: TcpStream, err: &ReqParseError) {
 fn handle_root(mut stream: TcpStream) {
     let msg = "Try POST with {\"url\": \"https://...\"}";
     let response = format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         msg.len(),
         msg
     );
@@ -239,7 +240,8 @@ fn handle_root(mut stream: TcpStream) {
 }
 
 fn redirect_to_root(mut stream: TcpStream) {
-    let response = "HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n";
+    let response =
+        "HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     let _ = stream.write_all(response.as_bytes());
 }
 
