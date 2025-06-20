@@ -73,7 +73,7 @@ impl std::error::Error for ReqParseError {}
 //
 
 const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const MAX_BODY: usize = 1_048_576;
+const MAX_BODY: usize = 102_400;
 const MAX_HEADER: u64 = 8192;
 
 //
