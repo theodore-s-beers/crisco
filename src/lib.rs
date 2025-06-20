@@ -73,6 +73,7 @@ impl std::error::Error for ReqParseError {}
 //
 
 const BASE62: &[u8; 62] = b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 const MAX_BODY: usize = 102_400;
 const MAX_HEADER: u64 = 8192;
 
@@ -181,6 +182,14 @@ pub fn handle_post<S: BuildHasher>(
     store: &mut HashMap<String, String, S>,
     req: &HttpRequest,
 ) {
+    // Dummy values; pull from environment later
+    let auth_ok = check_basic_auth(&req.headers, "admin:secret");
+    if !auth_ok {
+        let response = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(response.as_bytes());
+        return;
+    }
+
     if let Some(url) = extract_url(&req.body) {
         let short = shorten_url(url);
         store.insert(short.clone(), url.to_owned());
@@ -243,6 +252,60 @@ fn redirect_to_root(mut stream: TcpStream) {
     let response =
         "HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     let _ = stream.write_all(response.as_bytes());
+}
+
+fn check_basic_auth(headers: &[(String, String)], expected: &str) -> bool {
+    let auth = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("Authorization"))
+        .map_or("", |(_, v)| v.as_str());
+
+    if !auth.starts_with("Basic ") {
+        return false;
+    }
+
+    let encoded = &auth[6..];
+    let decoded_bytes = base64_decode(encoded).unwrap_or_default();
+    let decoded = std::str::from_utf8(&decoded_bytes).unwrap_or_default();
+
+    if decoded.is_empty() {
+        return false;
+    }
+
+    decoded == expected
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn base64_decode(input: &str) -> Option<Vec<u8>> {
+    let mut decode_map = [0u8; 256];
+    for (i, &b) in BASE64.iter().enumerate() {
+        decode_map[b as usize] = i as u8;
+    }
+
+    let mut output: Vec<u8> = Vec::new();
+    let mut buf = 0u32;
+    let mut bits = 0u32;
+
+    for byte in input.bytes() {
+        if byte == b'=' {
+            break;
+        }
+
+        if !(BASE64.contains(&byte)) {
+            return None;
+        }
+
+        buf = (buf << 6) | u32::from(decode_map[byte as usize]);
+        bits += 6;
+
+        if bits >= 8 {
+            bits -= 8;
+            output.push((buf >> bits) as u8);
+            buf &= (1 << bits) - 1;
+        }
+    }
+
+    Some(output)
 }
 
 fn extract_url(body: &str) -> Option<&str> {
