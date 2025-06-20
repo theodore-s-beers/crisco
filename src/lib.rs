@@ -152,7 +152,18 @@ pub fn handle_get<S: BuildHasher>(
     store: &mut HashMap<String, String, S>,
     req: &HttpRequest,
 ) {
+    if req.path == "/" {
+        return handle_root(stream);
+    }
+
     let short = req.path.trim_start_matches('/');
+    if short.is_empty()
+        || short.len() > 7
+        || !short.is_ascii()
+        || !short.bytes().all(|b| BASE62.contains(&b))
+    {
+        return redirect_to_root(stream);
+    }
 
     if let Some(url) = store.get(short) {
         let response =
@@ -160,10 +171,7 @@ pub fn handle_get<S: BuildHasher>(
 
         let _ = stream.write_all(response.as_bytes());
     } else {
-        let response =
-            "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 0\r\n\r\n";
-
-        let _ = stream.write_all(response.as_bytes());
+        redirect_to_root(stream);
     }
 }
 
@@ -218,6 +226,22 @@ pub fn handle_err(mut stream: TcpStream, err: &ReqParseError) {
 //
 // Private functions
 //
+
+fn handle_root(mut stream: TcpStream) {
+    let msg = "Try POST with {\"url\": \"https://...\"}";
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\n\r\n{}",
+        msg.len(),
+        msg
+    );
+
+    let _ = stream.write_all(response.as_bytes());
+}
+
+fn redirect_to_root(mut stream: TcpStream) {
+    let response = "HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\n\r\n";
+    let _ = stream.write_all(response.as_bytes());
+}
 
 fn extract_url(body: &str) -> Option<&str> {
     let key = "\"url\":";
