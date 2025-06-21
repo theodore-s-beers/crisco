@@ -83,6 +83,38 @@ This is for my own reference; things would be easier in many other environments.
 11. If everything is working, and you're using Cloudflare, you can enable DNS
     proxying for this subdomain.
 
-_To be continued with instructions on adding an `rc.d` script for this app in
-FreeBSD, making it a service that starts on boot and saves output to a log
-file._
+### Adding a FreeBSD service
+
+This allows the app to start automatically on boot, and to save output to a log
+file.
+
+1. Make a directory for logs: `mkdir -p /var/log/crisco`, then
+   `chown soandso /var/log/crisco`
+
+2. Create a file that looks something like this at `/usr/local/etc/rc.d/crisco`:
+
+   ```sh
+   #! /bin/sh
+
+   # PROVIDE: crisco
+   # REQUIRE: NETWORKING
+   # KEYWORD: shutdown
+
+   . /etc/rc.subr
+
+   name=crisco
+   rcvar=crisco_enable
+
+   command="/usr/sbin/daemon"
+   command_args="-f -o /var/log/crisco/output.log -p /var/run/crisco.pid /usr/home/soandso/crisco"
+
+   load_rc_config $name
+   : ${crisco_enable:="NO"}
+
+   run_rc_command "$1"
+   ```
+
+3. Make the new `rc.d` script executable: `chmod +x /usr/local/etc/rc.d/crisco`
+
+4. Enable the service and start it: `sysrc crisco_enable=YES`, then
+   `service crisco start`
