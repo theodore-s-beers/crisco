@@ -35,7 +35,7 @@ fn handle_client(mut stream: TcpStream, store: &mut HashMap<String, String>) {
         }
 
         Err(e) => {
-            eprintln!("{e}");
+            println!("{e}");
             handle_err(stream, &e);
         }
     }
