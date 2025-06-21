@@ -55,7 +55,7 @@ This is for my own reference; things would be easier in many other environments.
 7. Get a certificate: `certbot certonly --nginx -d sub.domain.tld`. (I used
    `certonly` because I preferred to edit the nginx config manually.)
 
-8. Add something like the following to the nginx config:
+8. Now add something like the following to the nginx config:
 
    ```nginx
    server {
