@@ -14,6 +14,14 @@ dependencies**. Here's how it works:
   original URL. Any other GET request will 303-redirect to /, which returns
   brief usage instructions.
 
+```sh
+# Should return `zJRNnMb` (if the credentials are correct)
+curl -X POST -u user:pass -H "Content-Type: application/json" \
+  -d '{"url": "https://www.theobeers.com/"}' \
+  http://127.0.0.1:8887/
+curl http://127.0.0.1:8887/zJRNnMb # Should 302 to https://www.theobeers.com/
+```
+
 I have this deployed behind nginx on a FreeBSD VPS (also with Cloudflare in
 front, of course), and I'm unreasonably happy with it. Maybe it will be a
 curiosity or amusement to someone else, as well.
