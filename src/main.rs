@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
-use scratch_server::{handle_err, handle_get, handle_post, parse_req};
+use crisco::{handle_err, handle_get, handle_post, parse_req};
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
 

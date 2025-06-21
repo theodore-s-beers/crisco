@@ -3,5 +3,5 @@
 version = 4
 
 [[package]]
-name = "scratch-server"
+name = "crisco"
 version = "0.1.0"
