@@ -1,5 +1,6 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::hash::BuildHasher;
@@ -200,15 +201,21 @@ pub fn handle_post<S: BuildHasher>(
     }
 
     if let Some(url) = extract_url(&req.body) {
-        let short = shorten_url(url);
+        let mut attempt = 0;
+        let mut short = shorten_url(url, attempt);
 
-        if let Some(existing_url) = store.get(&short)
+        while let Some(existing_url) = store.get(&short)
             && existing_url != url
         {
-            eprintln!("Responding with 500; hash collision between {url} and {existing_url}");
-            let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-            let _ = stream.write_all(response.as_bytes());
-            return;
+            attempt += 1;
+            if attempt > 10 {
+                eprintln!("Responding with 500; too many hash collisions");
+                let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+                let _ = stream.write_all(response.as_bytes());
+                return;
+            }
+
+            short = shorten_url(url, attempt);
         }
 
         store.insert(short.clone(), url.to_owned());
@@ -349,8 +356,14 @@ fn extract_url(body: &str) -> Option<&str> {
     Some(url)
 }
 
-fn shorten_url(url: &str) -> String {
-    let prefix = get_hash_prefix(url);
+fn shorten_url(url: &str, attempt: u32) -> String {
+    let salted = if attempt == 0 {
+        Cow::Borrowed(url)
+    } else {
+        Cow::Owned(format!("{url}:{attempt}"))
+    };
+
+    let prefix = get_hash_prefix(&salted);
     let base62_str = to_base62(prefix);
 
     // Return up to 7 characters of the Base62 string
