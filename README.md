@@ -91,7 +91,8 @@ file.
 1. Make a directory for logs: `mkdir -p /var/log/crisco`, then
    `chown soandso /var/log/crisco`
 
-2. Create a file that looks something like this at `/usr/local/etc/rc.d/crisco`:
+2. Create a file that looks something like the following at
+   `/usr/local/etc/rc.d/crisco`:
 
    ```sh
    #! /bin/sh
