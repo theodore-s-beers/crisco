@@ -80,7 +80,11 @@ This is for my own reference; things would be easier in many other environments.
 10. Run the actual app on the server: `./crisco`. Then you should be able to
     reach it all the way from the outside internet at `https://sub.domain.tld/`.
 
-11. If everything is working, and you're using Cloudflare, you can enable DNS
+11. As is noted above, POST requests are gated with HTTP Basic Auth. The
+    expected credentials should be set in a `BASIC_AUTH` environment variable in
+    the format `foo:bar`. This can be done in various ways...
+
+12. If everything is working, and you're using Cloudflare, you can enable DNS
     proxying for this subdomain.
 
 ### Adding a FreeBSD service
@@ -92,7 +96,9 @@ file.
    `chown soandso /var/log/crisco`
 
 2. Create a file that looks something like the following at
-   `/usr/local/etc/rc.d/crisco`:
+   `/usr/local/etc/rc.d/crisco`. Note that the `BASIC_AUTH` environment variable
+   is set inline in `command_args`. This is for simplicity; you might choose a
+   more secure approach.
 
    ```sh
    #! /bin/sh
@@ -107,7 +113,7 @@ file.
    rcvar=crisco_enable
 
    command="/usr/sbin/daemon"
-   command_args="-f -o /var/log/crisco/output.log -p /var/run/crisco.pid /usr/home/soandso/crisco"
+   command_args="-f -o /var/log/crisco/output.log -p /var/run/crisco.pid env BASIC_AUTH=foo:bar /usr/home/soandso/crisco"
 
    load_rc_config $name
    : ${crisco_enable:="NO"}
