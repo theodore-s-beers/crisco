@@ -1,7 +1,7 @@
 # crisco
 
-This is a very basic URL shortening server written in Rust **with no external
-dependencies**. Here's how it works:
+This is a very basic URL shortening server written in safe Rust **with no
+external dependencies**. Here's how it works:
 
 1. The server listens on port 8887 by default.
 
