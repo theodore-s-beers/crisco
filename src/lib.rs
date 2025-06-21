@@ -167,10 +167,10 @@ pub fn handle_get<S: BuildHasher>(
     }
 
     if let Some(url) = store.get(short) {
+        println!("Responding with 302");
         let response = format!(
             "HTTP/1.1 302 Found\r\nLocation: {url}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
         );
-
         let _ = stream.write_all(response.as_bytes());
     } else {
         redirect_to_root(stream);
@@ -184,6 +184,7 @@ pub fn handle_post<S: BuildHasher>(
 ) {
     let expected_auth = std::env::var("BASIC_AUTH").unwrap_or_default();
     if expected_auth.is_empty() {
+        println!("Responding with 500; expected credentials not set");
         let response =
             "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         let _ = stream.write_all(response.as_bytes());
@@ -192,6 +193,7 @@ pub fn handle_post<S: BuildHasher>(
 
     let auth_ok = check_basic_auth(&req.headers, &expected_auth);
     if !auth_ok {
+        println!("Responding with 401");
         let response = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         let _ = stream.write_all(response.as_bytes());
         return;
@@ -201,6 +203,7 @@ pub fn handle_post<S: BuildHasher>(
         let short = shorten_url(url);
         store.insert(short.clone(), url.to_owned());
 
+        println!("Responding with 200; URL shortened");
         let response = format!(
             "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             short.len(),
@@ -209,6 +212,7 @@ pub fn handle_post<S: BuildHasher>(
 
         let _ = stream.write_all(response.as_bytes());
     } else {
+        println!("Responding with 400; missing or invalid URL");
         let msg = "Missing or invalid URL in request body";
         let response = format!(
             "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -245,6 +249,7 @@ pub fn handle_err(mut stream: TcpStream, err: &ReqParseError) {
 //
 
 fn handle_root(mut stream: TcpStream) {
+    println!("Responding with 200; GET /");
     let msg = "Try POST with {\"url\": \"https://...\"}";
     let response = format!(
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
@@ -256,6 +261,7 @@ fn handle_root(mut stream: TcpStream) {
 }
 
 fn redirect_to_root(mut stream: TcpStream) {
+    println!("Responding with 303; redirect to /");
     let response =
         "HTTP/1.1 303 See Other\r\nLocation: /\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     let _ = stream.write_all(response.as_bytes());
