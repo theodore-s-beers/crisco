@@ -201,6 +201,16 @@ pub fn handle_post<S: BuildHasher>(
 
     if let Some(url) = extract_url(&req.body) {
         let short = shorten_url(url);
+
+        if let Some(existing_url) = store.get(&short)
+            && existing_url != url
+        {
+            eprintln!("Responding with 500; hash collision between {url} and {existing_url}");
+            let response = "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+            let _ = stream.write_all(response.as_bytes());
+            return;
+        }
+
         store.insert(short.clone(), url.to_owned());
 
         println!("Responding with 200; URL shortened");
