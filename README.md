@@ -82,7 +82,7 @@ This is for my own reference; things would be easier in many other environments.
 
 11. As is noted above, POST requests are gated with HTTP Basic Auth. The
     expected credentials should be set in a `BASIC_AUTH` environment variable in
-    the format `foo:bar`. This can be done in various ways...
+    the format `user:pass`. This can be done in various ways...
 
 12. If everything is working, and you're using Cloudflare, you can enable DNS
     proxying for this subdomain.
@@ -117,7 +117,7 @@ file.
      -f \
      -o /var/log/crisco/output.log \
      -p /var/run/crisco.pid \
-     env BASIC_AUTH=foo:bar /usr/home/soandso/crisco"
+     env BASIC_AUTH=user:pass /usr/home/soandso/crisco"
 
    load_rc_config $name
    : ${crisco_enable:="NO"}
