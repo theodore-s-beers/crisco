@@ -182,8 +182,15 @@ pub fn handle_post<S: BuildHasher>(
     store: &mut HashMap<String, String, S>,
     req: &HttpRequest,
 ) {
-    // Dummy values; pull from environment later
-    let auth_ok = check_basic_auth(&req.headers, "admin:secret");
+    let expected_auth = std::env::var("BASIC_AUTH").unwrap_or_default();
+    if expected_auth.is_empty() {
+        let response =
+            "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let _ = stream.write_all(response.as_bytes());
+        return;
+    }
+
+    let auth_ok = check_basic_auth(&req.headers, &expected_auth);
     if !auth_ok {
         let response = "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
         let _ = stream.write_all(response.as_bytes());
