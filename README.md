@@ -113,7 +113,11 @@ file.
    rcvar=crisco_enable
 
    command="/usr/sbin/daemon"
-   command_args="-f -o /var/log/crisco/output.log -p /var/run/crisco.pid env BASIC_AUTH=foo:bar /usr/home/soandso/crisco"
+   command_args="\
+     -f \
+     -o /var/log/crisco/output.log \
+     -p /var/run/crisco.pid \
+     env BASIC_AUTH=foo:bar /usr/home/soandso/crisco"
 
    load_rc_config $name
    : ${crisco_enable:="NO"}
